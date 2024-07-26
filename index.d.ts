@@ -9,6 +9,7 @@ declare module '@ekreative/react-native-braintree' {
     amount: string;
     currencyCode: string;
     shippingRequired: string;
+    shouldVault: string;
   }
 
   export interface Run3DSecureCheckOptions

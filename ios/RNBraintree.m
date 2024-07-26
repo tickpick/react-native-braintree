@@ -27,6 +27,7 @@ RCT_EXPORT_METHOD(showPayPalModule: (NSDictionary *)options
     NSString *amount = options[@"amount"];
     NSString *currencyCode = options[@"currencyCode"];
     NSString *shippingRequired = options[@"shippingRequired"];
+    NSString *shouldVault = options[@"shouldVault"];
 
     self.apiClient = [[BTAPIClient alloc] initWithAuthorization: clientToken];
     self.dataCollector = [[BTDataCollector alloc] initWithAPIClient:self.apiClient];
@@ -36,6 +37,7 @@ RCT_EXPORT_METHOD(showPayPalModule: (NSDictionary *)options
     request.currencyCode = currencyCode;
     request.shippingAddressRequired = [shippingRequired boolValue];
     request.userAction = BTPayPalRequestUserActionCommit;
+    request.requestBillingAgreement = [shouldVault boolValue];
     [payPalDriver tokenizePayPalAccountWithPayPalRequest:request completion:^(BTPayPalAccountNonce * _Nullable tokenizedPayPalAccount, NSError * _Nullable error) {
         if (error) {
             reject(@"ONE_TIME_PAYMENT_FAILED", error.localizedDescription, nil);
