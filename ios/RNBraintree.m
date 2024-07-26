@@ -15,12 +15,18 @@
 
 RCT_EXPORT_MODULE()
 
+static id ObjectOrNull(id object)
+{
+  return object ?: [NSNull null];
+}
+
 RCT_EXPORT_METHOD(showPayPalModule: (NSDictionary *)options
                   resolver: (RCTPromiseResolveBlock)resolve
                   rejecter: (RCTPromiseRejectBlock)reject) {
     NSString *clientToken = options[@"clientToken"];
     NSString *amount = options[@"amount"];
     NSString *currencyCode = options[@"currencyCode"];
+    NSString *shippingRequired = options[@"shippingRequired"];
 
     self.apiClient = [[BTAPIClient alloc] initWithAuthorization: clientToken];
     self.dataCollector = [[BTDataCollector alloc] initWithAPIClient:self.apiClient];
@@ -28,6 +34,8 @@ RCT_EXPORT_METHOD(showPayPalModule: (NSDictionary *)options
 
     BTPayPalCheckoutRequest *request= [[BTPayPalCheckoutRequest alloc] initWithAmount:amount];
     request.currencyCode = currencyCode;
+    request.shippingAddressRequired = [shippingRequired boolValue];
+    request.userAction = BTPayPalRequestUserActionCommit;
     [payPalDriver tokenizePayPalAccountWithPayPalRequest:request completion:^(BTPayPalAccountNonce * _Nullable tokenizedPayPalAccount, NSError * _Nullable error) {
         if (error) {
             reject(@"ONE_TIME_PAYMENT_FAILED", error.localizedDescription, nil);
@@ -38,8 +46,31 @@ RCT_EXPORT_METHOD(showPayPalModule: (NSDictionary *)options
             return;
         }
         [self.dataCollector collectDeviceData:^(NSString * _Nonnull deviceData) {
+            NSDictionary *billingAddress = @{
+                 @"name": [NSString stringWithFormat:@"%@ %@", tokenizedPayPalAccount.firstName, tokenizedPayPalAccount.lastName],
+                 @"phone": ObjectOrNull(tokenizedPayPalAccount.phone),
+                 @"street_address": ObjectOrNull(tokenizedPayPalAccount.billingAddress.streetAddress),
+                 @"street_address2": ObjectOrNull(tokenizedPayPalAccount.billingAddress.extendedAddress),
+                 @"city": ObjectOrNull(tokenizedPayPalAccount.billingAddress.locality),
+                 @"state": ObjectOrNull(tokenizedPayPalAccount.billingAddress.region),
+                 @"country": ObjectOrNull(tokenizedPayPalAccount.billingAddress.countryCodeAlpha2),
+                 @"zip": ObjectOrNull(tokenizedPayPalAccount.billingAddress.postalCode)
+                 };
+
+            NSDictionary *shippingAddress = @{
+                 @"name": [NSString stringWithFormat:@"%@ %@", tokenizedPayPalAccount.firstName, tokenizedPayPalAccount.lastName],
+                 @"phone": ObjectOrNull(tokenizedPayPalAccount.phone),
+                 @"street_address": ObjectOrNull(tokenizedPayPalAccount.shippingAddress.streetAddress),
+                 @"street_address2": ObjectOrNull(tokenizedPayPalAccount.shippingAddress.extendedAddress),
+                 @"city": ObjectOrNull(tokenizedPayPalAccount.shippingAddress.locality),
+                 @"state": ObjectOrNull(tokenizedPayPalAccount.shippingAddress.region),
+                 @"country": ObjectOrNull(tokenizedPayPalAccount.shippingAddress.countryCodeAlpha2),
+                 @"zip": ObjectOrNull(tokenizedPayPalAccount.shippingAddress.postalCode)
+                 };
             resolve(@{@"deviceData": deviceData,
                       @"email": tokenizedPayPalAccount.email,
+                      @"billing_address": billingAddress,
+                      @"shipping_address": shippingAddress,
                       @"nonce": tokenizedPayPalAccount.nonce,});
         }];
     }];
@@ -91,7 +122,7 @@ RCT_EXPORT_METHOD(tokenizeCard: (NSDictionary *)parameters
     card.cvv = parameters[@"cvv"];
     card.postalCode = parameters[@"postalCode"];
     card.shouldValidate = NO;
-    
+
     [cardClient tokenizeCard:card completion:^(BTCardNonce * _Nullable tokenizedCard, NSError * _Nullable error) {
         if (error) {
             reject(@"TOKENIZE_FAILED", error.localizedDescription, nil);
