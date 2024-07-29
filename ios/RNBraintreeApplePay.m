@@ -29,9 +29,14 @@ RCT_EXPORT_METHOD(runApplePay: (NSDictionary *)options
                      resolver: (RCTPromiseResolveBlock)resolve
                      rejecter: (RCTPromiseRejectBlock)reject) {
     NSString *companyName = options[@"companyName"];
+    NSString *merchantIdentifier = options[@"merchantIdentifier"]; //do we need this?
     NSString *amount = options[@"amount"];
     NSString *clientToken = options[@"clientToken"];
     NSString *currencyCode = options[@"currencyCode"];
+    NSString *countryCode = options[@"countryCode"];
+    NSArray *paymentSummaryItems = options[@"paymentSummaryItems"];
+    NSArray *shippingMethods = options[@"shippingMethods"];
+
     if (!companyName) {
         reject(@"NO_COMPANY_NAME", @"You must provide a `companyName`", nil);
         return;
@@ -55,11 +60,41 @@ RCT_EXPORT_METHOD(runApplePay: (NSDictionary *)options
         if (@available(iOS 11.0, *)) {
             paymentRequest.requiredBillingContactFields = [NSSet setWithObject:PKContactFieldPostalAddress];
         }
+        if (options[@"requestShipping"]) {
+            if (@available(iOS 11.0, *)) {
+                paymentRequest.requiredShippingContactFields = [NSSet setWithObjects:PKContactFieldPostalAddress, nil];
+            }
+        }
         paymentRequest.merchantCapabilities = PKMerchantCapability3DS;
+        paymentRequest.merchantIdentifier = merchantIdentifier;
+
+        NSMutableArray <PKPaymentSummaryItem *> * _paymentSummaryItems = [NSMutableArray array];
+        for (NSDictionary *paymentSummaryItem in paymentSummaryItems) {
+            NSDecimalNumber *decimalNumberAmount = [NSDecimalNumber decimalNumberWithString:paymentSummaryItem[@"amount"]];
+            PKPaymentSummaryItem *psi = [PKPaymentSummaryItem summaryItemWithLabel:paymentSummaryItem[@"label"] amount:decimalNumberAmount];
+            [_paymentSummaryItems addObject: psi];
+        }
+        paymentRequest.paymentSummaryItems = _paymentSummaryItems;
+        /*
         paymentRequest.paymentSummaryItems = @[
             [PKPaymentSummaryItem summaryItemWithLabel:companyName amount:[NSDecimalNumber decimalNumberWithString:amount]]
         ];
+         */
+
+        if (shippingMethods) {
+            NSMutableArray <PKShippingMethod *> * _shippingMethods = [NSMutableArray array];
+            for (NSDictionary *shippingMethod in shippingMethods) {
+                NSDecimalNumber *decimalNumberAmount = [NSDecimalNumber decimalNumberWithString:shippingMethod[@"amount"]];
+                PKShippingMethod *sm = [PKShippingMethod summaryItemWithLabel:shippingMethod[@"label"] amount:decimalNumberAmount];
+                [_shippingMethods addObject: sm];
+            }
+
+            paymentRequest.shippingMethods = _shippingMethods;
+        }
+
         paymentRequest.currencyCode = currencyCode;
+        paymentRequest.countryCode = countryCode;
+
         self.resolve = resolve;
         self.reject = reject;
         [self setIsApplePaymentAuthorized:NO];
@@ -126,4 +161,12 @@ RCT_EXPORT_METHOD(runApplePay: (NSDictionary *)options
     return topViewController;
 }
 
+
+- (PKPaymentSummaryItem *_Nonnull)convertDisplayItemToPaymentSummaryItem:(NSDictionary *_Nonnull)displayItem;
+{
+    NSDecimalNumber *decimalNumberAmount = [NSDecimalNumber decimalNumberWithString:displayItem[@"amount"]];
+    PKPaymentSummaryItem *paymentSummaryItem = [PKPaymentSummaryItem summaryItemWithLabel:displayItem[@"label"] amount:decimalNumberAmount];
+
+    return paymentSummaryItem;
+}
 @end
