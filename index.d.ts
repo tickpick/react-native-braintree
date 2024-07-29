@@ -8,8 +8,9 @@ declare module '@ekreative/react-native-braintree' {
     clientToken: string;
     amount: string;
     currencyCode: string;
-    shippingRequired: string;
-    shouldVault: string;
+    countryCode?: string;
+    shippingRequired?: string; //move to paypal options?
+    shouldVault?: string; //move to paypal options?
   }
 
   export interface Run3DSecureCheckOptions
@@ -39,8 +40,22 @@ declare module '@ekreative/react-native-braintree' {
     postalCode?: string;
   }
 
+  interface ApplePayPaymentSummaryItem {
+    label?: string;
+    amount: string;
+  }
+
+  interface ApplePayShippingMethod extends ApplePayPaymentSummaryItem {
+    identifier?: string;
+    detail?: string;
+  }
+
   export interface RunApplePayOptions extends BraintreeOptions {
     companyName: string;
+    merchantIdentifier: string;
+    paymentSummaryItems?: ApplePayPaymentSummaryItem[];
+    shippingMethods?: ApplePayShippingMethod[];
+    requestShipping?: boolean;
   }
 
   export interface PayPalBillingAgreementOptions {
