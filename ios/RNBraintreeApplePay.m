@@ -58,7 +58,7 @@ RCT_EXPORT_METHOD(runApplePay: (NSDictionary *)options
         }
 
         if (@available(iOS 11.0, *)) {
-            paymentRequest.requiredBillingContactFields = [NSSet setWithObject:PKContactFieldPostalAddress];
+            paymentRequest.requiredBillingContactFields = [NSSet setWithObjects:PKContactFieldPostalAddress, PKContactFieldName, PKContactFieldPhoneNumber, nil];
         }
         if (options[@"requestShipping"]) {
             if (@available(iOS 11.0, *)) {
@@ -74,18 +74,27 @@ RCT_EXPORT_METHOD(runApplePay: (NSDictionary *)options
             PKPaymentSummaryItem *psi = [PKPaymentSummaryItem summaryItemWithLabel:paymentSummaryItem[@"label"] amount:decimalNumberAmount];
             [_paymentSummaryItems addObject: psi];
         }
+
+        //add the total as the last item
+        [_paymentSummaryItems addObject: [PKPaymentSummaryItem summaryItemWithLabel:companyName amount:[NSDecimalNumber decimalNumberWithString:amount]]];
         paymentRequest.paymentSummaryItems = _paymentSummaryItems;
-        /*
-        paymentRequest.paymentSummaryItems = @[
-            [PKPaymentSummaryItem summaryItemWithLabel:companyName amount:[NSDecimalNumber decimalNumberWithString:amount]]
-        ];
-         */
 
         if (shippingMethods) {
             NSMutableArray <PKShippingMethod *> * _shippingMethods = [NSMutableArray array];
             for (NSDictionary *shippingMethod in shippingMethods) {
                 NSDecimalNumber *decimalNumberAmount = [NSDecimalNumber decimalNumberWithString:shippingMethod[@"amount"]];
                 PKShippingMethod *sm = [PKShippingMethod summaryItemWithLabel:shippingMethod[@"label"] amount:decimalNumberAmount];
+                if ([shippingMethod[@"detail"] isKindOfClass:[NSString class]]) {
+                    sm.detail = shippingMethod[@"detail"];
+                } else {
+                    sm.detail = @"";
+                }
+
+                if ([shippingMethod[@"identifier"] isKindOfClass:[NSString class]]) {
+                    sm.identifier = shippingMethod[@"identifier"];
+                } else {
+                    sm.identifier = @"";
+                }
                 [_shippingMethods addObject: sm];
             }
 
@@ -100,26 +109,7 @@ RCT_EXPORT_METHOD(runApplePay: (NSDictionary *)options
         [self setIsApplePaymentAuthorized:NO];
         PKPaymentAuthorizationViewController *paymentController = [[PKPaymentAuthorizationViewController alloc] initWithPaymentRequest:paymentRequest];
         paymentController.delegate = self;
-        [[self reactRoot] presentViewController:paymentController animated:YES completion:NULL];
-    }];
-}
-
-- (void)handleTokenizationResult: (BTApplePayCardNonce *)tokenizedApplePayPayment
-                           error: (NSError *)error
-                      completion: (void (^)(PKPaymentAuthorizationStatus))completion{
-    if (!tokenizedApplePayPayment && self.reject) {
-        self.reject(error.localizedDescription, error.localizedDescription, error);
-        completion(PKPaymentAuthorizationStatusFailure);
-        [self resetPaymentResolvers];
-        return;
-    }
-    [self.dataCollector collectDeviceData:^(NSString * _Nonnull deviceData) {
-        if (self.resolve) {
-            self.resolve(@{@"deviceData": deviceData,
-                        @"nonce": tokenizedApplePayPayment.nonce});
-            completion(PKPaymentAuthorizationStatusSuccess);
-            [self resetPaymentResolvers];
-        }
+        [[self reactRoot] presentViewController:paymentController animated:YES completion:nil];
     }];
 }
 
@@ -136,7 +126,45 @@ RCT_EXPORT_METHOD(runApplePay: (NSDictionary *)options
     BTApplePayClient *applePayClient = [[BTApplePayClient alloc] initWithAPIClient:self.apiClient];
     [applePayClient tokenizeApplePayPayment:payment
                                  completion:^(BTApplePayCardNonce *tokenizedApplePayPayment, NSError *error) {
-        [self handleTokenizationResult:tokenizedApplePayPayment error:error completion:completion];
+        if (!tokenizedApplePayPayment && self.reject) {
+            self.reject(error.localizedDescription, error.localizedDescription, error);
+            completion(PKPaymentAuthorizationStatusFailure);
+            [self resetPaymentResolvers];
+            return;
+        }
+        [self.dataCollector collectDeviceData:^(NSString * _Nonnull deviceData) {
+            if (self.resolve) {
+
+                NSDictionary *billingAddress = @{
+                                                 @"name": [NSString stringWithFormat:@"%@ %@", payment.billingContact.name.givenName, payment.billingContact.name.familyName],
+                                                 @"addressLine": payment.billingContact.postalAddress.street,
+                                                 @"city": payment.billingContact.postalAddress.city,
+                                                 @"region": payment.billingContact.postalAddress.state,
+                                                 @"country": [payment.billingContact.postalAddress.ISOCountryCode uppercaseString],
+                                                 @"postalCode": payment.billingContact.postalAddress.postalCode,
+                                                 @"phone": (!payment.billingContact.phoneNumber || payment.billingContact.phoneNumber.stringValue.length == 0) ? [NSNull null] : payment.billingContact.phoneNumber,
+                                                 };
+                NSDictionary *shippingAddress = @{};
+
+                if(payment.shippingContact){
+                            shippingAddress = @{
+                                                 @"addressLine": payment.shippingContact.postalAddress.street,
+                                                 @"city": payment.shippingContact.postalAddress.city,
+                                                 @"region": payment.shippingContact.postalAddress.state,
+                                                 @"country": [payment.shippingContact.postalAddress.ISOCountryCode uppercaseString],
+                                                 @"postalCode": payment.shippingContact.postalAddress.postalCode,
+                                                 };
+                }
+
+                self.resolve(@{@"deviceData": deviceData,
+                               @"billing_address": billingAddress,
+                               @"shipping_address": shippingAddress,
+                               @"nonce": tokenizedApplePayPayment.nonce,
+                               @"type": tokenizedApplePayPayment.type});
+                completion(PKPaymentAuthorizationStatusSuccess);
+                [self resetPaymentResolvers];
+            }
+        }];
     }];
 }
 
