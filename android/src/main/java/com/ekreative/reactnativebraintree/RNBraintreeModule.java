@@ -23,6 +23,7 @@ import com.braintreepayments.api.PayPalClient;
 import com.braintreepayments.api.PayPalPaymentIntent;
 import com.braintreepayments.api.PayPalVaultRequest;
 import com.braintreepayments.api.PaymentMethodNonce;
+import com.braintreepayments.api.PostalAddress;
 import com.braintreepayments.api.ThreeDSecureAdditionalInformation;
 import com.braintreepayments.api.ThreeDSecureClient;
 import com.braintreepayments.api.ThreeDSecurePostalAddress;
@@ -137,11 +138,15 @@ public class RNBraintreeModule extends ReactContextBaseJavaModule
             setup(parameters.getString("clientToken"));
 
             String currency = "USD";
+            Boolean shippingRequired = false;
             if (!parameters.hasKey("amount")) {
                 promise.reject("You must provide a amount");
             }
             if (parameters.hasKey("currencyCode")) {
                 currency = parameters.getString("currencyCode");
+            }
+            if (parameters.hasKey("shippingRequired")) {
+                shippingRequired = parameters.getBoolean("shippingRequired");
             }
             if (mCurrentActivity != null) {
                 mPayPalClient = new PayPalClient(mBraintreeClient);
@@ -149,11 +154,12 @@ public class RNBraintreeModule extends ReactContextBaseJavaModule
                         parameters.getString("amount")
                 );
                 request.setCurrencyCode(currency);
+                request.setShippingAddressRequired(shippingRequired);
                 request.setIntent(PayPalPaymentIntent.AUTHORIZE);
+                request.setUserAction(PayPalCheckoutRequest.USER_ACTION_COMMIT);
                 mPayPalClient.tokenizePayPalAccount(
                         mCurrentActivity,
-                        request,
-                        e -> handlePayPalResult(null, e));
+                        request);
             }
         }
     }
@@ -186,8 +192,7 @@ public class RNBraintreeModule extends ReactContextBaseJavaModule
 
             mPayPalClient.tokenizePayPalAccount(
                     mCurrentActivity,
-                    request,
-                    e -> handlePayPalResult(null, e));
+                    request);
         }
 
     }
@@ -201,7 +206,39 @@ public class RNBraintreeModule extends ReactContextBaseJavaModule
             return;
         }
         if (payPalAccountNonce != null) {
-            sendPaymentMethodNonceResult(payPalAccountNonce.getString());
+            if (mPromise != null) {
+                final WritableMap result = Arguments.createMap();
+                result.putString("nonce", payPalAccountNonce.getString());
+                PostalAddress pa = payPalAccountNonce.getBillingAddress();
+                final WritableMap billing = Arguments.createMap();
+                billing.putString("name", pa.getRecipientName());
+                billing.putString("phone", pa.getPhoneNumber());
+                billing.putString("street_address", pa.getStreetAddress());
+                billing.putString("street_address2", pa.getExtendedAddress());
+                billing.putString("city", pa.getLocality());
+                billing.putString("state", pa.getRegion());
+                billing.putString("country", pa.getCountryCodeAlpha2());
+                billing.putString("zip", pa.getPostalCode());
+
+                result.putMap("billing_address", billing);
+
+                PostalAddress shippingAddress = payPalAccountNonce.getShippingAddress();
+
+                if (shippingAddress.getPostalCode() != null && !shippingAddress.getPostalCode().isEmpty()) {
+                    final WritableMap shipping = Arguments.createMap();
+                    shipping.putString("name", pa.getRecipientName());
+                    shipping.putString("phone", pa.getPhoneNumber());
+                    shipping.putString("street_address", shippingAddress.getStreetAddress());
+                    shipping.putString("street_address2", shippingAddress.getExtendedAddress());
+                    shipping.putString("city", shippingAddress.getLocality());
+                    shipping.putString("state", shippingAddress.getRegion());
+                    shipping.putString("country", shippingAddress.getCountryCodeAlpha2());
+                    shipping.putString("zip", shippingAddress.getPostalCode());
+
+                    result.putMap("shipping_address", shipping);
+                }
+                mPromise.resolve(result);
+            }
         }
     }
 
