@@ -29,6 +29,7 @@ Pod::Spec.new do |s|
   s.dependency "Braintree/PaymentFlow"
   s.dependency "Braintree/ApplePay"
   s.dependency "Braintree/ThreeDSecure"
+  s.dependency "Braintree/Venmo"
 
 end
 

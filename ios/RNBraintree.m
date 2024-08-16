@@ -5,6 +5,7 @@
 #import "BTDataCollector.h"
 #import "BraintreePaymentFlow.h"
 #import "BraintreeThreeDSecure.h"
+#import "BraintreeVenmo.h"
 
 @interface RNBraintree() <BTViewControllerPresentingDelegate, BTThreeDSecureRequestDelegate>
 @property (nonatomic, strong) BTAPIClient *apiClient;
@@ -133,6 +134,31 @@ RCT_EXPORT_METHOD(tokenizeCard: (NSDictionary *)parameters
         [self.dataCollector collectDeviceData:^(NSString * _Nonnull deviceData) {
             resolve(@{@"deviceData": deviceData,
                       @"nonce": tokenizedCard.nonce,});
+        }];
+    }];
+}
+
+RCT_EXPORT_METHOD(showVenmoModule:(NSDictionary *)options
+                  resolver: (RCTPromiseResolveBlock)resolve
+                  rejecter: (RCTPromiseRejectBlock)reject)
+{
+    NSString *clientToken = options[@"clientToken"];
+    self.apiClient = [[BTAPIClient alloc] initWithAuthorization: clientToken];
+    self.dataCollector = [[BTDataCollector alloc] initWithAPIClient:self.apiClient];
+
+    BTVenmoDriver *venmoDriver = [[BTVenmoDriver alloc] initWithAPIClient:self.apiClient];
+    BTVenmoRequest *venmoRequest = [[BTVenmoRequest alloc] init];
+    venmoRequest.paymentMethodUsage = BTVenmoPaymentMethodUsageSingleUse;
+
+    [venmoDriver tokenizeVenmoAccountWithVenmoRequest:venmoRequest completion:^(BTVenmoAccountNonce *tokenizedVenmoAccount, NSError *error) {
+        if (error) {
+            reject(@"VENMO_FAILED", error.localizedDescription, nil);
+            return;
+        }
+        [self.dataCollector collectDeviceData:^(NSString * _Nonnull deviceData) {
+            resolve(@{@"deviceData": deviceData,
+                      @"nonce": tokenizedVenmoAccount.nonce,
+                      @"username": tokenizedVenmoAccount.username});
         }];
     }];
 }
