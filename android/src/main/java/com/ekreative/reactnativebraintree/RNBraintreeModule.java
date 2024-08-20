@@ -30,6 +30,10 @@ import com.braintreepayments.api.ThreeDSecurePostalAddress;
 import com.braintreepayments.api.ThreeDSecureRequest;
 import com.braintreepayments.api.ThreeDSecureResult;
 import com.braintreepayments.api.UserCanceledException;
+import com.braintreepayments.api.VenmoAccountNonce;
+import com.braintreepayments.api.VenmoClient;
+import com.braintreepayments.api.VenmoPaymentMethodUsage;
+import com.braintreepayments.api.VenmoRequest;
 import com.facebook.react.bridge.ActivityEventListener;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.LifecycleEventListener;
@@ -53,6 +57,7 @@ public class RNBraintreeModule extends ReactContextBaseJavaModule
     private BraintreeClient mBraintreeClient;
     private PayPalClient mPayPalClient;
     private GooglePayClient mGooglePayClient;
+    private VenmoClient mVenmoClient;
     private ThreeDSecureClient mThreeDSecureClient;
 
     @Override
@@ -90,6 +95,16 @@ public class RNBraintreeModule extends ReactContextBaseJavaModule
                     );
                 }
                 break;
+            case BraintreeRequestCodes.VENMO:
+                if (mVenmoClient != null) {
+                    mVenmoClient.onActivityResult(
+                            mContext,
+                            resultCode,
+                            intent,
+                            this::handleVenmoResult
+                    );
+                }
+                break;
         }
     }
 
@@ -123,6 +138,13 @@ public class RNBraintreeModule extends ReactContextBaseJavaModule
                             );
                         }
                         break;
+                    case BraintreeRequestCodes.VENMO:
+                        if (mVenmoClient != null) {
+                            mVenmoClient.onBrowserSwitchResult(
+                                    browserSwitchResult,
+                                    this::handleVenmoResult
+                            );
+                        }
                 }
             }
         }
@@ -237,6 +259,48 @@ public class RNBraintreeModule extends ReactContextBaseJavaModule
 
                     result.putMap("shipping_address", shipping);
                 }
+                mPromise.resolve(result);
+            }
+        }
+    }
+
+    @ReactMethod
+    public void showVenmoModule(final ReadableMap parameters,
+                                final Promise promise) {
+        mPromise = promise;
+
+        if (!parameters.hasKey("clientToken")) {
+            promise.reject("You must provide a clientToken");
+        } else {
+            setup(parameters.getString("clientToken"));
+
+            if (mCurrentActivity != null) {
+                mVenmoClient = new VenmoClient(mBraintreeClient);
+                boolean venmoAvailable = mVenmoClient.isVenmoAppSwitchAvailable(mContext);
+                if (venmoAvailable) {
+                    VenmoRequest request = new VenmoRequest(VenmoPaymentMethodUsage.SINGLE_USE);
+                    request.setFallbackToWeb(true);
+                    mVenmoClient.tokenizeVenmoAccount(mCurrentActivity, request);
+                } else {
+                    promise.reject("NOT_INSTALLED");
+                }
+            }
+        }
+    }
+
+    private void handleVenmoResult(@Nullable VenmoAccountNonce venmoAccountNonce,
+                                   @Nullable Exception error) {
+        if (error != null) {
+            handleError(error);
+            return;
+        }
+        if (venmoAccountNonce != null) {
+            if (mPromise != null) {
+                final WritableMap result = Arguments.createMap();
+                result.putString("nonce", venmoAccountNonce.getString());
+                result.putString("username", venmoAccountNonce.getUsername());
+                result.putString("deviceData", this.mDeviceData);
+
                 mPromise.resolve(result);
             }
         }
@@ -455,7 +519,6 @@ public class RNBraintreeModule extends ReactContextBaseJavaModule
                     mContext,
                     (result, e) -> mDeviceData = result);
             mToken = token;
-
         }
     }
 
