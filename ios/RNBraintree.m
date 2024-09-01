@@ -157,8 +157,7 @@ RCT_EXPORT_METHOD(showVenmoModule:(NSDictionary *)options
         }
         [self.dataCollector collectDeviceData:^(NSString * _Nonnull deviceData) {
             resolve(@{@"deviceData": deviceData,
-                      @"nonce": tokenizedVenmoAccount.nonce,
-                      @"username": tokenizedVenmoAccount.username});
+                      @"nonce": tokenizedVenmoAccount.nonce});
         }];
     }];
 }
