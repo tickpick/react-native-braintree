@@ -109,7 +109,7 @@ RCT_EXPORT_METHOD(runApplePay: (NSDictionary *)options
         [self setIsApplePaymentAuthorized:NO];
         PKPaymentAuthorizationViewController *paymentController = [[PKPaymentAuthorizationViewController alloc] initWithPaymentRequest:paymentRequest];
         paymentController.delegate = self;
-        [[self reactRoot] presentViewController:paymentController animated:YES completion:nil];
+        [[self reactRoot] presentViewController:paymentController animated:YES completion:NULL];
     }];
 }
 
