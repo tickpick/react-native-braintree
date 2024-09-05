@@ -173,7 +173,7 @@ RCT_EXPORT_METHOD(runApplePay: (NSDictionary *)options
     if (self.reject && [self isApplePaymentAuthorized]) {
         self.reject(@"APPLE_PAY_FAILED", @"Apple Pay failed", nil);
     }
-    if (self.isApplePaymentAuthorized == NO) {
+    if (self.reject && self.isApplePaymentAuthorized == NO) {
         self.reject(@"USER_CANCELLATION", @"The user cancelled", nil);
     }
     [self resetPaymentResolvers];
